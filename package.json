@@ -1,0 +1,16 @@
+{
+  "name": "bandscheiben-in-bewegung",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Webcam-gestützte Veranschaulichung: Bewegung versorgt die Bandscheibe.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "serve": "node tests/serve.mjs",
+    "e2e": "node tests/e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

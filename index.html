@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Datenschutz per Technik: Die Seite darf nur Dateien vom eigenen Server laden
+       und keine Verbindungen zu fremden Servern aufbauen. 'wasm-unsafe-eval' ist
+       für das WebAssembly der Posenerkennung nötig. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Bandscheiben in Bewegung</title>
+  <meta name="description" content="Veranschaulichung per Webcam: Wie Bewegung deine Bandscheiben mit Wasser und Nährstoffen versorgt. Läuft komplett im Browser.">
+  <meta name="theme-color" content="#f3ede2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121a1c" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#steuerung">Zur Steuerung springen</a>
+
+  <header class="masthead">
+    <div class="masthead__inner">
+      <svg class="masthead__mark" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="10" y="4" width="44" height="16" rx="7" class="mk-bone"/>
+        <ellipse cx="32" cy="32" rx="25" ry="9" class="mk-ring"/>
+        <ellipse cx="32" cy="32" rx="11" ry="4.5" class="mk-core"/>
+        <rect x="10" y="44" width="44" height="16" rx="7" class="mk-bone"/>
+      </svg>
+      <div>
+        <p class="eyebrow">Ein Experiment zum Mitmachen</p>
+        <h1>Bandscheiben in Bewegung</h1>
+        <p class="lead">Deine Bandscheiben haben kaum eigene Blutgefäße. Sie leben davon, dass du dich bewegst. Hier siehst du, warum.</p>
+      </div>
+    </div>
+    <p class="honesty" id="hinweis-ehrlich">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5"/><path d="M10 9v5M10 6.2v.1"/></svg>
+      <span><strong>Veranschaulichung, keine Messung.</strong> Eine Kamera sieht keine Wirbel und keine Bandscheiben. Das Modell wird aus deiner Körperbewegung abgeleitet. Keine Diagnose, kein Ersatz für ärztlichen Rat.</span>
+    </p>
+  </header>
+
+  <section class="toolbar" id="steuerung" aria-label="Steuerung">
+    <div class="toolbar__group" role="group" aria-label="Modus wählen">
+      <button type="button" class="btn btn--primary" id="btn-camera">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2.5h6L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.6"/></svg>
+        <span>Kamera starten</span>
+      </button>
+      <button type="button" class="btn" id="btn-demo-still" aria-pressed="false">Demo: still sitzen</button>
+      <button type="button" class="btn" id="btn-demo-move" aria-pressed="false"><span>Demo: <span class="hide-sm">Wirbelsäule </span>bewegen</span></button>
+      <button type="button" class="btn btn--quiet" id="btn-stop" hidden>Stopp</button>
+    </div>
+    <div class="toolbar__group toolbar__group--end">
+      <label class="field" for="sel-timescale">
+        <span class="field__label">Zeitraffer</span>
+        <select id="sel-timescale"></select>
+      </label>
+      <button type="button" class="btn btn--quiet" id="btn-reset" aria-label="Modell zurücksetzen" title="Modell auf den Anfangszustand setzen">Zurücksetzen</button>
+    </div>
+  </section>
+
+  <div class="alert" id="alert" role="alert" hidden>
+    <p class="alert__title" id="alert-title"></p>
+    <p class="alert__hint" id="alert-hint"></p>
+    <div class="alert__actions">
+      <button type="button" class="btn btn--small" id="alert-retry" hidden>Erneut versuchen</button>
+      <button type="button" class="btn btn--small btn--quiet" id="alert-demo">Demo starten</button>
+      <button type="button" class="btn btn--small btn--quiet" id="alert-close">Schließen</button>
+    </div>
+  </div>
+
+  <main class="stage" id="inhalt">
+    <!-- 3D-Bandscheibe: Hauptelement -->
+    <section class="panel panel--disc" aria-labelledby="disc-title">
+      <div class="panel__head">
+        <h2 id="disc-title">Deine Bandscheibe L4/L5 <span class="tag">Modell</span></h2>
+        <p class="mode-chip" id="mode-chip">Vorschau</p>
+      </div>
+      <div class="disc-host" id="disc-host" role="img" aria-label="3D-Modell einer Lendenbandscheibe zwischen zwei Wirbelkörpern. Zustand: Vorschau.">
+        <p class="disc-fallback" id="disc-fallback" hidden>Die 3D-Ansicht braucht WebGL. Dein Browser oder Gerät unterstützt das gerade nicht. Alles andere funktioniert trotzdem.</p>
+        <p class="disc-note">Bewegung anatomisch stark übertrieben dargestellt</p>
+        <div class="disc-view" role="group" aria-label="Ansicht drehen">
+          <button type="button" class="icon-btn" id="view-left" aria-label="Ansicht nach links drehen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 5 5"/></svg></button>
+          <button type="button" class="icon-btn" id="view-reset" aria-label="Ansicht zurücksetzen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/></svg></button>
+          <button type="button" class="icon-btn" id="view-right" aria-label="Ansicht nach rechts drehen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5M20 12H9a5 5 0 0 0-5 5"/></svg></button>
+        </div>
+        <p class="disc-hint" aria-hidden="true">Ziehen zum Drehen</p>
+      </div>
+      <ul class="legend" aria-label="Legende">
+        <li><span class="sw sw--annulus"></span><span><strong>Faserring</strong> (Anulus fibrosus) – Lamellen mit wechselnder Faserrichtung</span></li>
+        <li><span class="sw sw--nucleus"></span><span><strong>Gallertkern</strong> (Nucleus pulposus) – wasserreich, glänzt, wenn gut versorgt</span></li>
+        <li><span class="sw sw--endplate"></span><span><strong>Deckplatte</strong> – Knorpelschicht, durch die der Austausch läuft</span></li>
+        <li><span class="sw sw--bone"></span><span><strong>Wirbelkörper</strong> L4 (oben) und L5 (unten), mit Blutgefäßen</span></li>
+        <li><span class="sw sw--nutrient"></span><span><strong>Wasser &amp; Nährstoffe</strong> strömen hinein</span></li>
+        <li><span class="sw sw--waste"></span><span><strong>Abfallstoffe</strong> müssen hinaus</span></li>
+      </ul>
+    </section>
+
+    <!-- Kamera -->
+    <section class="panel panel--camera" aria-labelledby="cam-title">
+      <div class="panel__head">
+        <h2 id="cam-title">Du vor der Kamera</h2>
+        <p class="privacy-chip"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="9" width="12" height="8.5" rx="1.5"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9"/></svg>Bild bleibt auf deinem Gerät</p>
+      </div>
+      <div class="cam-frame" id="cam-frame">
+        <video id="video" playsinline muted aria-hidden="true"></video>
+        <canvas id="overlay" aria-hidden="true"></canvas>
+        <div class="cam-placeholder" id="cam-placeholder">
+          <p>Sitz so, dass <strong>Kopf, Schultern und Hüfte</strong> im Bild sind. Seitlich oder schräg geht auch.</p>
+        </div>
+        <p class="cam-badge" id="cam-badge" hidden></p>
+      </div>
+      <dl class="facts" id="facts">
+        <div><dt>Personen</dt><dd id="fact-persons">–</dd></div>
+        <div><dt>Haltung</dt><dd id="fact-posture">–</dd></div>
+        <div><dt>Blickrichtung</dt><dd id="fact-view">–</dd></div>
+      </dl>
+      <p class="posture-note small muted" id="posture-note" hidden>Knie nicht im Bild – ich nehme an, dass du sitzt (typisch am Schreibtisch).</p>
+      <p class="cam-status" id="cam-status" aria-live="polite"></p>
+      <details class="angles">
+        <summary>Rumpfwinkel anzeigen</summary>
+        <dl class="angles__list">
+          <div><dt>Beugen/Strecken</dt><dd id="ang-flex">–</dd></div>
+          <div><dt>Seitneigung</dt><dd id="ang-lat">–</dd></div>
+          <div><dt>Drehung</dt><dd id="ang-twist">–</dd></div>
+        </dl>
+        <p class="small">Geschätzt aus 3D-Körperpunkten, nicht gemessen. Vorzeichen aus deiner Sicht: + = vor / rechts / nach rechts gedreht.</p>
+      </details>
+    </section>
+
+    <!-- Coach -->
+    <section class="panel panel--coach" aria-labelledby="coach-title">
+      <h2 id="coach-title" class="visually-hidden">Coach</h2>
+      <div class="status" id="status" data-tone="neutral">
+        <div class="status__pulse" aria-hidden="true"></div>
+        <div aria-live="polite" aria-atomic="true" id="status-live">
+          <p class="status__title" id="status-title">Bereit</p>
+          <p class="status__text" id="status-text">Starte die Kamera oder eine Demo, dann siehst du, wie Bewegung deine Bandscheibe versorgt.</p>
+        </div>
+      </div>
+
+      <div class="still">
+        <p class="still__label">Ohne Wirbelsäulenbewegung</p>
+        <p class="still__clock" id="still-clock">0:00</p>
+        <p class="still__sim" id="still-sim">im Modell: –</p>
+      </div>
+
+      <div class="block">
+        <h3 class="block__title">Bewegungsrichtungen <span class="muted">letzte 20 Sekunden</span></h3>
+        <div class="bars">
+          <div class="bar" id="bar-flex" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Beugen und Strecken">
+            <span class="bar__label">Beugen &amp; Strecken</span><span class="bar__track"><span class="bar__fill"></span></span>
+          </div>
+          <div class="bar" id="bar-lat" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Seitneigung">
+            <span class="bar__label">Seitneigung</span><span class="bar__track"><span class="bar__fill"></span></span>
+          </div>
+          <div class="bar" id="bar-twist" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Drehung">
+            <span class="bar__label">Drehung</span><span class="bar__track"><span class="bar__fill"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="block block--model">
+        <h3 class="block__title">Im Modell <span class="muted" id="sim-time">Zeitraffer</span></h3>
+        <dl class="gauges">
+          <div class="gauge" id="g-pump"><dt>Pumpwirkung jetzt</dt><dd><span class="gauge__track"><span class="gauge__fill"></span></span><span class="gauge__word">–</span></dd></div>
+          <div class="gauge" id="g-fluid"><dt>Wasser im Kern</dt><dd><span class="gauge__track"><span class="gauge__fill"></span></span><span class="gauge__word">–</span></dd></div>
+          <div class="gauge" id="g-waste"><dt>Abfallstoffe</dt><dd><span class="gauge__track"><span class="gauge__fill"></span></span><span class="gauge__word">–</span></dd></div>
+        </dl>
+        <figure class="chart">
+          <canvas id="chart" role="img" aria-label="Verlauf von Wasser im Kern und Bewegung der letzten zwei Minuten"></canvas>
+          <figcaption><span class="key key--fluid"></span>Wasser im Kern <span class="key key--motion"></span>Bewegung <span class="muted">· letzte 2 Minuten</span></figcaption>
+        </figure>
+      </div>
+
+      <div class="exercise" id="exercise">
+        <p class="exercise__kicker">Vorschlag für dich</p>
+        <h3 class="exercise__title" id="ex-title">Katze-Kuh im Sitzen</h3>
+        <ol class="exercise__steps" id="ex-steps"></ol>
+      </div>
+
+      <div class="reminder">
+        <label class="switch">
+          <input type="checkbox" id="chk-notify">
+          <span class="switch__ui" aria-hidden="true"></span>
+          <span>Erinnern, wenn ich zu lange stillsitze</span>
+        </label>
+        <p class="small muted" id="notify-note">Der Tab-Titel zeigt dann einen Hinweis. Browser-Benachrichtigungen nur, wenn du sie erlaubst.</p>
+      </div>
+    </section>
+  </main>
+
+  <section class="explain" aria-labelledby="explain-title">
+    <h2 id="explain-title">Warum Bewegung deine Bandscheiben ernährt</h2>
+    <div class="explain__grid">
+      <article class="card">
+        <p class="card__num">1</p>
+        <h3>Kaum eigene Blutgefäße</h3>
+        <p>Im Inneren einer erwachsenen Bandscheibe gibt es praktisch keine Blutgefäße. Sauerstoff und Nährstoffe wandern aus den Blutgefäßen der Wirbelkörper langsam durch die knorpeligen <strong>Deckplatten</strong> bis in den Gallertkern. Abfallstoffe nehmen den umgekehrten Weg. Diesen langsamen Weg nennt man Diffusion.</p>
+      </article>
+      <article class="card">
+        <p class="card__num">2</p>
+        <h3>Wie ein Schwamm</h3>
+        <p>Wird die Bandscheibe belastet, drückt sie Flüssigkeit heraus. Wird sie entlastet, saugt sie wieder Flüssigkeit an. Wechselst du oft zwischen Be- und Entlastung, entsteht eine Art <strong>Pumpe</strong>: Der Austausch läuft besser, frische Nährstoffe kommen leichter hinein.</p>
+      </article>
+      <article class="card">
+        <p class="card__num">3</p>
+        <h3>Stillsitzen bremst</h3>
+        <p>Sitzt du lange unbewegt, bleibt die Last gleich. Es fließt wenig nach, die Bandscheibe verliert über die Zeit Wasser und wird etwas flacher, Abfallstoffe werden schlechter abtransportiert. Schon kleine, häufige Bewegungen helfen. Die beste Haltung ist die <strong>nächste</strong>.</p>
+      </article>
+    </div>
+
+    <div class="limits">
+      <div>
+        <h3>Was diese Seite kann – und was nicht</h3>
+        <ul>
+          <li>Sie erkennt Körperpunkte (Schultern, Hüfte, Knie …) und schätzt daraus, wie du deinen Rumpf bewegst.</li>
+          <li>Die Bandscheibe wird <strong>nicht gemessen</strong>. Ihr Verhalten ist ein vereinfachtes Modell. Bewegungen und Zeitverläufe sind zur Anschauung übertrieben bzw. im Zeitraffer.</li>
+          <li>Die Seite stellt keine Diagnose und ersetzt keine ärztliche oder physiotherapeutische Beratung. Hast du Schmerzen, Taubheit oder Lähmungen, lass dich untersuchen.</li>
+          <li>Bewege dich nur so, wie es sich gut anfühlt. Keine ruckartigen Bewegungen.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Datenschutz</h3>
+        <ul>
+          <li>Das Kamerabild wird ausschließlich in deinem Browser ausgewertet und nirgendwohin gesendet.</li>
+          <li>Alle Programmteile und das Erkennungsmodell kommen von dieser Seite selbst. Eine Sicherheitsregel (Content-Security-Policy) verbietet dem Browser Verbindungen zu fremden Servern.</li>
+          <li>Es gibt keine Konten, keine Cookies und kein Tracking. Gespeichert wird nur deine Zeitraffer-Einstellung im Browser.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>Bandscheiben in Bewegung · Open Source · Posenerkennung: MediaPipe (Apache 2.0) · 3D: three.js (MIT) · Details und Lizenzen in der README.</p>
+  </footer>
+</body>
+</html>
